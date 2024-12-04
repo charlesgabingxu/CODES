@@ -8,7 +8,7 @@ This is a JAVA GUI CODE of a store called John Workshop. It simulates the system
 - Any IDE that supports Java
 
 Functions of the code
-Login and Register System
-Buy System
-Inquire Service System
-Add Item System
+- Login and Register System
+- Buy System
+- Inquire Service System
+- Add Item System
