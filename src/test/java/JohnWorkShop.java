@@ -169,51 +169,76 @@ public class JohnWorkShop {
     private static JPanel createBuyItemPanel(JFrame frame) {
         JPanel panel = new JPanel();
         panel.setLayout(new BorderLayout());
-
+    
         JPanel itemListPanel = new JPanel();
         itemListPanel.setLayout(new BoxLayout(itemListPanel, BoxLayout.Y_AXIS));
         JScrollPane scrollPane = new JScrollPane(itemListPanel, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-
+    
         List<Document> items = itemsCollection.find().into(new ArrayList<>());
-
+    
         for (Document item : items) {
             JPanel itemPanel = new JPanel();
             itemPanel.setLayout(new BoxLayout(itemPanel, BoxLayout.Y_AXIS));
             itemPanel.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
             itemPanel.setBackground(Color.LIGHT_GRAY);
-
+    
             JLabel nameLabel = new JLabel("Name: " + item.getString("itemName"));
             JLabel partNumberLabel = new JLabel("Part Number: " + item.getString("partNumber"));
             JLabel descriptionLabel = new JLabel("Description: " + item.getString("description"));
             JLabel priceLabel = new JLabel("Price: $" + item.getString("price"));
-
+    
             JButton addToCartButton = new JButton("Add to Cart");
             addToCartButton.addActionListener(e -> cart.add(item));
-
+    
             itemPanel.add(nameLabel);
             itemPanel.add(partNumberLabel);
             itemPanel.add(descriptionLabel);
             itemPanel.add(priceLabel);
             itemPanel.add(addToCartButton);
-
+    
             itemListPanel.add(itemPanel);
             itemListPanel.add(Box.createVerticalStrut(10));
         }
-
+    
         JButton viewCartButton = new JButton("View Cart");
         viewCartButton.addActionListener(e -> {
-            StringBuilder cartDetails = new StringBuilder();
             if (cart.isEmpty()) {
-                cartDetails.append("Your cart is empty!");
-            } else {
-                for (Document item : cart) {
-                    cartDetails.append(String.format("Name: %s, Price: $%s\n", item.getString("itemName"), item.getString("price")));
-                }
+                JOptionPane.showMessageDialog(frame, "Your cart is empty!", "Cart", JOptionPane.INFORMATION_MESSAGE);
+                return;
             }
+    
+            JPanel cartPanel = new JPanel();
+            cartPanel.setLayout(new BoxLayout(cartPanel, BoxLayout.Y_AXIS));
+    
+            for (Document item : new ArrayList<>(cart)) {
+                JPanel itemPanel = new JPanel();
+                itemPanel.setLayout(new BoxLayout(itemPanel, BoxLayout.Y_AXIS));
+                itemPanel.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
+                itemPanel.setBackground(Color.LIGHT_GRAY);
+    
+                JLabel nameLabel = new JLabel("Name: " + item.getString("itemName"));
+                JLabel priceLabel = new JLabel("Price: $" + item.getString("price"));
+    
+                JButton removeButton = new JButton("Remove");
+                removeButton.addActionListener(removeEvent -> {
+                    cart.remove(item);
+                    JOptionPane.showMessageDialog(frame, "Item removed from the cart.", "Cart", JOptionPane.INFORMATION_MESSAGE);
+                    SwingUtilities.getWindowAncestor(cartPanel).dispose();
+                });
+    
+                itemPanel.add(nameLabel);
+                itemPanel.add(priceLabel);
+                itemPanel.add(removeButton);
+                cartPanel.add(itemPanel);
+                cartPanel.add(Box.createVerticalStrut(10));
+            }
+    
+        JScrollPane cartScrollPane = new JScrollPane(cartPanel, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        cartScrollPane.setPreferredSize(new Dimension(300, 400));
+        JOptionPane.showMessageDialog(frame, cartScrollPane, "Your Cart", JOptionPane.PLAIN_MESSAGE);
 
-            JOptionPane.showMessageDialog(frame, cartDetails.toString(), "Cart", JOptionPane.INFORMATION_MESSAGE);
         });
-
+    
         JButton buyButton = new JButton("Buy");
         buyButton.addActionListener(e -> {
             if (cart.isEmpty()) {
@@ -223,24 +248,25 @@ public class JohnWorkShop {
                 JOptionPane.showMessageDialog(frame, "Purchase successful!", "Success", JOptionPane.INFORMATION_MESSAGE);
             }
         });
-
+    
         JPanel bottomPanel = new JPanel();
         bottomPanel.setLayout(new GridLayout(1, 2, 10, 10));
         bottomPanel.add(viewCartButton);
         bottomPanel.add(buyButton);
-
+    
         JButton backButton = new JButton("Back");
         backButton.addActionListener(e -> {
             CardLayout layout = (CardLayout) frame.getContentPane().getLayout();
             layout.show(frame.getContentPane(), "PostLogin");
         });
-
+    
         panel.add(scrollPane, BorderLayout.CENTER);
         panel.add(bottomPanel, BorderLayout.SOUTH);
         panel.add(backButton, BorderLayout.NORTH);
-
+    
         return panel;
     }
+    
 
     private static JPanel createRegisterPanel(JFrame frame) {
         JPanel panel = new JPanel(null);
