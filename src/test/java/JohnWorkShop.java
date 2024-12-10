@@ -80,24 +80,19 @@ public class JohnWorkShop {
     }
 
     private static JPanel createViewTransactionsPanel(JFrame frame, String currentUser) {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        JPanel contentPanel = new JPanel();
+        contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
     
         JLabel title = new JLabel("Your Transactions");
         title.setFont(new Font("Arial", Font.BOLD, 16));
         title.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panel.add(title);
+        contentPanel.add(title);
     
         MongoCollection<Document> transactionsCollection = database.getCollection("transactions");
         List<Document> transactions = transactionsCollection.find(Filters.eq("username", currentUser)).into(new ArrayList<>());
     
-        List<Document> userTransactions = fetchTransactions(currentUser);
-        for (Document transaction : userTransactions) {
-            System.out.println(transaction.toJson());
-        }
-
         if (transactions.isEmpty()) {
-            panel.add(new JLabel("No transactions found."));
+            contentPanel.add(new JLabel("No transactions found."));
         } else {
             for (Document transaction : transactions) {
                 String type = transaction.getString("type");
@@ -105,7 +100,21 @@ public class JohnWorkShop {
                 if ("purchase".equals(type)) {
                     String itemName = transaction.getString("itemName");
                     String price = transaction.getString("price");
-                    panel.add(new JLabel("- Purchased: " + itemName + " for $" + price));
+                    String description = transaction.getString("description");
+                    String paymentMethod = transaction.getString("paymentMethod");
+    
+                    JPanel purchasePanel = new JPanel();
+                    purchasePanel.setLayout(new BoxLayout(purchasePanel, BoxLayout.Y_AXIS));
+                    purchasePanel.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
+                    purchasePanel.setBackground(Color.LIGHT_GRAY);
+    
+                    purchasePanel.add(new JLabel("- Item: " + itemName));
+                    purchasePanel.add(new JLabel("  Description: " + (description == null ? "No description" : description)));
+                    purchasePanel.add(new JLabel("  Price: $" + price));
+                    purchasePanel.add(new JLabel("  Payment Method: " + paymentMethod));
+    
+                    contentPanel.add(purchasePanel);
+                    contentPanel.add(Box.createVerticalStrut(10));
                 } else if ("maintenance".equals(type)) {
                     String maintenanceType = transaction.getString("MaintenanceType");
                     String schedule = transaction.getString("MaintenanceSchedule");
@@ -117,7 +126,7 @@ public class JohnWorkShop {
                     maintenancePanel.setBackground(Color.LIGHT_GRAY);
     
                     maintenancePanel.add(new JLabel("- Maintenance Booking: " + maintenanceType + " on " + schedule));
-                    maintenancePanel.add(new JLabel("Status: " + (status == null ? "Pending" : status)));
+                    maintenancePanel.add(new JLabel("  Status: " + (status == null ? "Pending" : status)));
     
                     JButton cancelButton = new JButton("Cancel");
                     cancelButton.addActionListener(e -> {
@@ -140,21 +149,27 @@ public class JohnWorkShop {
                     });
     
                     maintenancePanel.add(cancelButton);
-                    panel.add(maintenancePanel);
+                    contentPanel.add(maintenancePanel);
+                    contentPanel.add(Box.createVerticalStrut(10));
                 }
             }
         }
+    
+        JScrollPane scrollPane = new JScrollPane(contentPanel, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+    
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.add(scrollPane, BorderLayout.CENTER);
     
         JButton backButton = new JButton("Back");
         backButton.addActionListener(e -> {
             CardLayout layout = (CardLayout) frame.getContentPane().getLayout();
             layout.show(frame.getContentPane(), "PostLogin");
         });
-        panel.add(backButton);
+        panel.add(backButton, BorderLayout.SOUTH);
     
         return panel;
     }
-
+    
     private static List<Document> fetchTransactions(String username) {
         MongoCollection<Document> transactionsCollection = database.getCollection("transactions");
         return transactionsCollection.find(Filters.eq("username", username)).into(new ArrayList<>());
@@ -335,7 +350,7 @@ public class JohnWorkShop {
     private static boolean isValidSchedule(String schedule) {
         String regex = "^(0[1-9]|1[0-2]):[0-5][0-9] (AM|PM), " + 
                        "(January|February|March|April|May|June|July|August|September|October|November|December) " + 
-                       "\\d{2}, \\d{4}$";
+                       "\\d{1,2}, \\d{4}$";
         return schedule.matches(regex);
     }
     
@@ -372,11 +387,11 @@ public class JohnWorkShop {
         }
     }
     
-    private static boolean purchaseItem(Document item, String buyer) {
+    private static boolean purchaseItem(Document item, String buyer, String paymentMethod) {
         try {
             MongoCollection<Document> transactionsCollection = database.getCollection("transactions");
             MongoCollection<Document> itemsCollection = database.getCollection("items");
-            
+    
             Document purchasedItem = new Document(item).append("buyer", buyer);
     
             itemsCollection.replaceOne(Filters.eq("itemID", item.getString("itemID")), purchasedItem);
@@ -386,6 +401,7 @@ public class JohnWorkShop {
                     .append("itemID", item.getString("itemID"))
                     .append("itemName", item.getString("itemName"))
                     .append("price", item.getString("price"))
+                    .append("paymentMethod", paymentMethod)
                     .append("timestamp", System.currentTimeMillis());
             transactionsCollection.insertOne(transaction);
     
@@ -474,14 +490,37 @@ public class JohnWorkShop {
             if (cart.isEmpty()) {
                 JOptionPane.showMessageDialog(frame, "Cart is empty! Add items before buying.", "Error", JOptionPane.ERROR_MESSAGE);
             } else {
+                String[] options = {"Cash", "Credit Card"};
+                int choice = JOptionPane.showOptionDialog(
+                    frame, 
+                    "Select Payment Method", 
+                    "Payment", 
+                    JOptionPane.DEFAULT_OPTION, 
+                    JOptionPane.INFORMATION_MESSAGE, 
+                    null, 
+                    options, 
+                    options[0]
+                );
+        
+                if (choice == JOptionPane.CLOSED_OPTION) {
+                    return; 
+                }
+        
+                String paymentMethod = options[choice];
+                boolean allSuccess = true;
+        
                 for (Document item : new ArrayList<>(cart)) {
-                    boolean success = purchaseItem(item, currentUser);
+                    boolean success = purchaseItem(item, currentUser, paymentMethod);
                     if (!success) {
                         JOptionPane.showMessageDialog(frame, "Failed to purchase: " + item.getString("itemName"), "Error", JOptionPane.ERROR_MESSAGE);
+                        allSuccess = false;
                     }
                 }
-                cart.clear();
-                JOptionPane.showMessageDialog(frame, "Purchase successful!", "Success", JOptionPane.INFORMATION_MESSAGE);
+        
+                if (allSuccess) {
+                    cart.clear();
+                    JOptionPane.showMessageDialog(frame, "Purchase successful using " + paymentMethod + "!", "Success", JOptionPane.INFORMATION_MESSAGE);
+                }
             }
         });
 
