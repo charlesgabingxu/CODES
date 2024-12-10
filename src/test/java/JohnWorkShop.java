@@ -80,53 +80,101 @@ public class JohnWorkShop {
     }
 
     private static JPanel createViewTransactionsPanel(JFrame frame, String currentUser) {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        JPanel contentPanel = new JPanel();
+        contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
     
         JLabel title = new JLabel("Your Transactions");
         title.setFont(new Font("Arial", Font.BOLD, 16));
         title.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panel.add(title);
+        contentPanel.add(title);
     
-        panel.add(new JLabel("\nMaintenance Bookings:"));
-        List<Document> bookings = database.getCollection("maintenancerepairs")
-                .find(Filters.eq("username", currentUser)) 
-                .into(new ArrayList<>());
+        MongoCollection<Document> transactionsCollection = database.getCollection("transactions");
+        List<Document> transactions = transactionsCollection.find(Filters.eq("username", currentUser)).into(new ArrayList<>());
     
-        if (bookings.isEmpty()) {
-            panel.add(new JLabel("No maintenance bookings found."));
+        if (transactions.isEmpty()) {
+            contentPanel.add(new JLabel("No transactions found."));
         } else {
-            for (Document booking : bookings) {
-                String maintenanceType = booking.getString("MaintenanceType");
-                String schedule = booking.getString("MaintenanceSchedule");
-                panel.add(new JLabel("- " + maintenanceType + ": " + schedule));
+            for (Document transaction : transactions) {
+                String type = transaction.getString("type");
+    
+                if ("purchase".equals(type)) {
+                    String itemName = transaction.getString("itemName");
+                    String price = transaction.getString("price");
+                    String description = transaction.getString("description");
+                    String paymentMethod = transaction.getString("paymentMethod");
+    
+                    JPanel purchasePanel = new JPanel();
+                    purchasePanel.setLayout(new BoxLayout(purchasePanel, BoxLayout.Y_AXIS));
+                    purchasePanel.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
+                    purchasePanel.setBackground(Color.LIGHT_GRAY);
+    
+                    purchasePanel.add(new JLabel("- Item: " + itemName));
+                    purchasePanel.add(new JLabel("  Description: " + (description == null ? "No description" : description)));
+                    purchasePanel.add(new JLabel("  Price: $" + price));
+                    purchasePanel.add(new JLabel("  Payment Method: " + paymentMethod));
+    
+                    contentPanel.add(purchasePanel);
+                    contentPanel.add(Box.createVerticalStrut(10));
+                } else if ("maintenance".equals(type)) {
+                    String maintenanceType = transaction.getString("MaintenanceType");
+                    String schedule = transaction.getString("MaintenanceSchedule");
+                    String status = transaction.getString("Status");
+    
+                    JPanel maintenancePanel = new JPanel();
+                    maintenancePanel.setLayout(new BoxLayout(maintenancePanel, BoxLayout.Y_AXIS));
+                    maintenancePanel.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
+                    maintenancePanel.setBackground(Color.LIGHT_GRAY);
+    
+                    maintenancePanel.add(new JLabel("- Maintenance Booking: " + maintenanceType + " on " + schedule));
+                    maintenancePanel.add(new JLabel("  Status: " + (status == null ? "Pending" : status)));
+    
+                    JButton cancelButton = new JButton("Cancel");
+                    cancelButton.addActionListener(e -> {
+                        int confirmation = JOptionPane.showConfirmDialog(frame, "Are you sure you want to cancel this booking?", "Cancel Booking", JOptionPane.YES_NO_OPTION);
+                        if (confirmation == JOptionPane.YES_OPTION) {
+                            transactionsCollection.updateOne(
+                                    Filters.and(
+                                            Filters.eq("username", currentUser),
+                                            Filters.eq("type", "maintenance"),
+                                            Filters.eq("MaintenanceSchedule", schedule)
+                                    ),
+                                    new Document("$set", new Document("Status", "Canceled"))
+                            );
+                            JOptionPane.showMessageDialog(frame, "Maintenance booking canceled successfully.");
+                            JPanel updatedPanel = createViewTransactionsPanel(frame, currentUser);
+                            frame.getContentPane().add(updatedPanel, "ViewTransactions");
+                            CardLayout layout = (CardLayout) frame.getContentPane().getLayout();
+                            layout.show(frame.getContentPane(), "ViewTransactions");
+                        }
+                    });
+    
+                    maintenancePanel.add(cancelButton);
+                    contentPanel.add(maintenancePanel);
+                    contentPanel.add(Box.createVerticalStrut(10));
+                }
             }
         }
     
-        panel.add(new JLabel("\nPurchased Items:"));
-        List<Document> purchases = database.getCollection("items")
-                .find(Filters.eq("buyer", currentUser))
-                .into(new ArrayList<>());
+        JScrollPane scrollPane = new JScrollPane(contentPanel, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
     
-        if (purchases.isEmpty()) {
-            panel.add(new JLabel("No items purchased."));
-        } else {
-            for (Document purchase : purchases) {
-                String itemName = purchase.getString("itemName");
-                String price = purchase.getString("price");
-                panel.add(new JLabel("- " + itemName + ": $" + price));
-            }
-        }
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.add(scrollPane, BorderLayout.CENTER);
     
         JButton backButton = new JButton("Back");
         backButton.addActionListener(e -> {
             CardLayout layout = (CardLayout) frame.getContentPane().getLayout();
             layout.show(frame.getContentPane(), "PostLogin");
         });
-        panel.add(backButton);
+        panel.add(backButton, BorderLayout.SOUTH);
     
         return panel;
     }
+    
+    private static List<Document> fetchTransactions(String username) {
+        MongoCollection<Document> transactionsCollection = database.getCollection("transactions");
+        return transactionsCollection.find(Filters.eq("username", username)).into(new ArrayList<>());
+    }
+    
     
     private static JPanel createLoginPanel(JFrame frame) {
         JPanel panel = new JPanel(null); 
@@ -202,6 +250,10 @@ public class JohnWorkShop {
         viewTransactionsButton.setBounds(250, 250, BUTTON_SIZE.width, BUTTON_SIZE.height);
         logoutButton.setBounds(250, 300, BUTTON_SIZE.width, BUTTON_SIZE.height);
 
+        if (!"Administrator92410".equals(currentUser)) {
+            addItemButton.setVisible(false);
+        }
+
         addItemButton.addActionListener(e -> {
             CardLayout layout = (CardLayout) frame.getContentPane().getLayout();
             layout.show(frame.getContentPane(), "AddItem");
@@ -217,21 +269,26 @@ public class JohnWorkShop {
         addBookButton.addActionListener(e -> {
             JPanel addBookPanel = new JPanel();
             addBookPanel.setLayout(new BoxLayout(addBookPanel, BoxLayout.Y_AXIS));
-        
-            JTextField scheduleField = new JTextField(15);
-            JTextField maintenanceTypeField = new JTextField(15);
-        
-            addBookPanel.add(new JLabel("Maintenance Schedule (Format: TIME, MONTH, DAY, YEAR):"));
+
+            JLabel scheduleLabel = new JLabel("Maintenance Schedule (Format: TIME, MONTH, DAY, YEAR):");
+            addBookPanel.add(scheduleLabel);
+
+            JTextField scheduleField = new JTextField(300); 
+            scheduleField.setMaximumSize(new Dimension(450, 20)); 
             addBookPanel.add(scheduleField);
-            addBookPanel.add(new JLabel("Maintenance Type:"));
+
+            JLabel maintenanceTypeLabel = new JLabel("Maintenance Type:");
+            addBookPanel.add(maintenanceTypeLabel);
+
+            JTextField maintenanceTypeField = new JTextField(300); 
+            maintenanceTypeField.setMaximumSize(new Dimension(450, 20)); 
             addBookPanel.add(maintenanceTypeField);
-        
+                    
             JButton submitButton = new JButton("Submit");
             submitButton.addActionListener(submitEvent -> {
                 String schedule = scheduleField.getText();
                 String maintenanceType = maintenanceTypeField.getText();
-        
-                // Validate maintenance schedule format
+                
                 if (!isValidSchedule(schedule)) {
                     JOptionPane.showMessageDialog(addBookPanel,
                             "Invalid Schedule Format! Please use '10:00 AM, December 07, 2024'.",
@@ -293,7 +350,7 @@ public class JohnWorkShop {
     private static boolean isValidSchedule(String schedule) {
         String regex = "^(0[1-9]|1[0-2]):[0-5][0-9] (AM|PM), " + 
                        "(January|February|March|April|May|June|July|August|September|October|November|December) " + 
-                       "\\d{2}, \\d{4}$";
+                       "\\d{1,2}, \\d{4}$";
         return schedule.matches(regex);
     }
     
@@ -301,14 +358,11 @@ public class JohnWorkShop {
         try {
             MongoCollection<Document> maintenanceRepairsCollection = database.getCollection("maintenancerepairs");
     
-            Document existingBook = maintenanceRepairsCollection.find(
-                    Filters.and(
-                            Filters.eq("MaintenanceSchedule", maintenanceSchedule),
-                            Filters.eq("username", username)
-                    )
+            Document conflictingBooking = maintenanceRepairsCollection.find(
+                    Filters.eq("MaintenanceSchedule", maintenanceSchedule)
             ).first();
     
-            if (existingBook != null) {
+            if (conflictingBooking != null) {
                 return false;
             }
     
@@ -317,28 +371,47 @@ public class JohnWorkShop {
                     .append("username", username);
     
             maintenanceRepairsCollection.insertOne(newBook);
-            return true; 
+    
+            MongoCollection<Document> transactionsCollection = database.getCollection("transactions");
+            Document transaction = new Document("username", username)
+                    .append("type", "maintenance")
+                    .append("MaintenanceType", maintenanceType)
+                    .append("MaintenanceSchedule", maintenanceSchedule)
+                    .append("timestamp", System.currentTimeMillis());
+            transactionsCollection.insertOne(transaction);
+    
+            return true;
         } catch (Exception e) {
             e.printStackTrace();
             return false;
         }
     }
-
-    private static boolean purchaseItem(Document item, String buyer) {
+    
+    private static boolean purchaseItem(Document item, String buyer, String paymentMethod) {
         try {
+            MongoCollection<Document> transactionsCollection = database.getCollection("transactions");
             MongoCollection<Document> itemsCollection = database.getCollection("items");
-            
-            Document purchasedItem = new Document(item)
-                    .append("buyer", buyer);
+    
+            Document purchasedItem = new Document(item).append("buyer", buyer);
     
             itemsCollection.replaceOne(Filters.eq("itemID", item.getString("itemID")), purchasedItem);
+    
+            Document transaction = new Document("username", buyer)
+                    .append("type", "purchase")
+                    .append("itemID", item.getString("itemID"))
+                    .append("itemName", item.getString("itemName"))
+                    .append("price", item.getString("price"))
+                    .append("paymentMethod", paymentMethod)
+                    .append("timestamp", System.currentTimeMillis());
+            transactionsCollection.insertOne(transaction);
+    
             return true; 
         } catch (Exception e) {
             e.printStackTrace();
             return false; 
         }
     }
-
+    
     private static JPanel createBuyItemPanel(JFrame frame) {
         JPanel panel = new JPanel();
         panel.setLayout(new BorderLayout());
@@ -417,14 +490,37 @@ public class JohnWorkShop {
             if (cart.isEmpty()) {
                 JOptionPane.showMessageDialog(frame, "Cart is empty! Add items before buying.", "Error", JOptionPane.ERROR_MESSAGE);
             } else {
+                String[] options = {"Cash", "Credit Card"};
+                int choice = JOptionPane.showOptionDialog(
+                    frame, 
+                    "Select Payment Method", 
+                    "Payment", 
+                    JOptionPane.DEFAULT_OPTION, 
+                    JOptionPane.INFORMATION_MESSAGE, 
+                    null, 
+                    options, 
+                    options[0]
+                );
+        
+                if (choice == JOptionPane.CLOSED_OPTION) {
+                    return; 
+                }
+        
+                String paymentMethod = options[choice];
+                boolean allSuccess = true;
+        
                 for (Document item : new ArrayList<>(cart)) {
-                    boolean success = purchaseItem(item, currentUser);
+                    boolean success = purchaseItem(item, currentUser, paymentMethod);
                     if (!success) {
                         JOptionPane.showMessageDialog(frame, "Failed to purchase: " + item.getString("itemName"), "Error", JOptionPane.ERROR_MESSAGE);
+                        allSuccess = false;
                     }
                 }
-                cart.clear();
-                JOptionPane.showMessageDialog(frame, "Purchase successful!", "Success", JOptionPane.INFORMATION_MESSAGE);
+        
+                if (allSuccess) {
+                    cart.clear();
+                    JOptionPane.showMessageDialog(frame, "Purchase successful using " + paymentMethod + "!", "Success", JOptionPane.INFORMATION_MESSAGE);
+                }
             }
         });
 
