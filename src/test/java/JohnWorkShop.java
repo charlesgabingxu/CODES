@@ -54,7 +54,7 @@ public class JohnWorkShop {
     private static void createAndShowGUI() {
         JFrame frame = new JFrame("JohnWorkShop");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(500, 500);
+        frame.setSize(600, 500);
         frame.setLayout(new CardLayout());
         frame.setResizable(false);
 
@@ -83,8 +83,8 @@ public class JohnWorkShop {
         JPanel contentPanel = new JPanel();
         contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
     
-        JLabel title = new JLabel("Your Transactions");
-        title.setFont(new Font("Arial", Font.BOLD, 16));
+        JLabel title = new JLabel("USER TRANSACTION");
+        title.setFont(new Font("Arial", Font.BOLD, 17));
         title.setAlignmentX(Component.CENTER_ALIGNMENT);
         contentPanel.add(title);
     
@@ -400,6 +400,7 @@ public class JohnWorkShop {
                     .append("type", "purchase")
                     .append("itemID", item.getString("itemID"))
                     .append("itemName", item.getString("itemName"))
+                    .append("description", item.getString("description"))
                     .append("price", item.getString("price"))
                     .append("paymentMethod", paymentMethod)
                     .append("timestamp", System.currentTimeMillis());
